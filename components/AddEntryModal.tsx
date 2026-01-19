@@ -32,7 +32,12 @@ const MONTHS = [
   { value: 12, label: 'December' }
 ]
 
+// Generate years from 2020 to current year
+const currentYear = new Date().getFullYear()
+const YEARS = Array.from({ length: currentYear - 2019 }, (_, i) => currentYear - i)
+
 export default function AddEntryModal({ wallets, year, month, type, onClose, onAdded }: AddEntryModalProps) {
+  const [selectedYear, setSelectedYear] = useState(year)
   const [selectedMonth, setSelectedMonth] = useState(month || new Date().getMonth() + 1)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [btcPrice, setBtcPrice] = useState('')
@@ -66,7 +71,7 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            year,
+            year: selectedYear,
             month: selectedMonth,
             btcPrice: btcPrice ? parseFloat(btcPrice) : null,
             entries: validEntries.map(e => ({
@@ -141,7 +146,15 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Year</label>
-                  <input type="text" value={year} disabled className="input bg-gray-100 dark:bg-gray-600" />
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="input"
+                  >
+                    {YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Month</label>
@@ -163,8 +176,10 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
                   className="input"
                 />
+                <p className="text-xs text-gray-500 mt-1">You can select any past date</p>
               </div>
             )}
 

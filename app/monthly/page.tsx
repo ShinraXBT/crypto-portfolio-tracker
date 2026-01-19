@@ -29,10 +29,13 @@ interface MonthlySummary {
   monthlyData: MonthlyData[]
 }
 
+// Generate all years from 2020 to current
+const currentYear = new Date().getFullYear()
+const ALL_YEARS = Array.from({ length: currentYear - 2019 }, (_, i) => currentYear - i)
+
 export default function MonthlyPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlySummary | null>(null)
   const [wallets, setWallets] = useState<Wallet[]>([])
-  const [years, setYears] = useState<number[]>([])
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -40,17 +43,12 @@ export default function MonthlyPage() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [walletsRes, yearsRes, monthlyRes] = await Promise.all([
+      const [walletsRes, monthlyRes] = await Promise.all([
         fetch('/api/wallets'),
-        fetch('/api/years'),
         fetch(`/api/monthly/summary?year=${selectedYear}`)
       ])
 
       if (walletsRes.ok) setWallets(await walletsRes.json())
-      if (yearsRes.ok) {
-        const yearsData = await yearsRes.json()
-        setYears(yearsData.length > 0 ? yearsData : [new Date().getFullYear()])
-      }
       if (monthlyRes.ok) setMonthlyData(await monthlyRes.json())
     } catch (error) {
       console.error('Failed to fetch data:', error)
@@ -78,24 +76,37 @@ export default function MonthlyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Monthly Tracking</h1>
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            {years.map((year) => (
-              <button
-                key={year}
-                onClick={() => setSelectedYear(year)}
-                className={cn(
-                  'px-4 py-2 rounded-lg font-medium transition-colors',
-                  selectedYear === year
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
-                )}
-              >
-                {year}
-              </button>
-            ))}
+            <button
+              onClick={() => setSelectedYear(y => Math.max(2020, y - 1))}
+              disabled={selectedYear <= 2020}
+              className="btn btn-secondary disabled:opacity-50"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="input w-28 text-center font-bold"
+            >
+              {ALL_YEARS.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSelectedYear(y => Math.min(currentYear, y + 1))}
+              disabled={selectedYear >= currentYear}
+              className="btn btn-secondary disabled:opacity-50"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
           <button onClick={() => setShowModal(true)} className="btn btn-primary">
             + Add Entry
@@ -164,10 +175,10 @@ export default function MonthlyPage() {
           <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No monthly data</h3>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Start by adding your first monthly entry.</p>
+          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No data for {selectedYear}</h3>
+          <p className="mt-2 text-gray-500 dark:text-gray-400">Add monthly entries for this year.</p>
           <button onClick={() => setShowModal(true)} className="btn btn-primary mt-4">
-            Add First Entry
+            Add Entry for {selectedYear}
           </button>
         </div>
       )}
