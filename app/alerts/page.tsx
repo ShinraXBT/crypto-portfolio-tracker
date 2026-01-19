@@ -119,22 +119,22 @@ export default function AlertsPage() {
     }
   }
 
-  const handleDelete = async (alert: Alert) => {
-    if (!confirm(`Delete alert "${alert.name}"?`)) return
+  const handleDelete = async (alertItem: Alert) => {
+    if (!confirm(`Delete alert "${alertItem.name}"?`)) return
     try {
-      await fetch(`/api/alerts/${alert.id}`, { method: 'DELETE' })
+      await fetch(`/api/alerts/${alertItem.id}`, { method: 'DELETE' })
       fetchData()
     } catch (error) {
-      alert('Failed to delete')
+      console.error('Failed to delete')
     }
   }
 
-  const toggleActive = async (alert: Alert) => {
+  const toggleActive = async (alertItem: Alert) => {
     try {
-      await fetch(`/api/alerts/${alert.id}`, {
+      await fetch(`/api/alerts/${alertItem.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !alert.isActive })
+        body: JSON.stringify({ isActive: !alertItem.isActive })
       })
       fetchData()
     } catch (error) {
