@@ -36,21 +36,47 @@ const MONTHS = [
 const currentYear = new Date().getFullYear()
 const YEARS = Array.from({ length: currentYear - 2019 }, (_, i) => currentYear - i)
 
+interface EntryField {
+  id: number
+  name: string
+  value: string
+}
+
 export default function AddEntryModal({ wallets, year, month, type, onClose, onAdded }: AddEntryModalProps) {
   const [selectedYear, setSelectedYear] = useState(year)
   const [selectedMonth, setSelectedMonth] = useState(month || new Date().getMonth() + 1)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [btcPrice, setBtcPrice] = useState('')
-  const [entries, setEntries] = useState(
-    wallets.map(w => ({ walletId: w.id, walletName: w.name, valueUsd: '' }))
-  )
+  const [fields, setFields] = useState<EntryField[]>([
+    { id: 1, name: '', value: '' }
+  ])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const totalValue = entries.reduce((sum, e) => {
-    const val = parseFloat(e.valueUsd) || 0
+  // Counter for unique IDs
+  const [nextId, setNextId] = useState(2)
+
+  const totalValue = fields.reduce((sum, f) => {
+    const val = parseFloat(f.value) || 0
     return sum + val
   }, 0)
+
+  const addField = () => {
+    setFields([...fields, { id: nextId, name: '', value: '' }])
+    setNextId(nextId + 1)
+  }
+
+  const removeField = (id: number) => {
+    if (fields.length > 1) {
+      setFields(fields.filter(f => f.id !== id))
+    }
+  }
+
+  const updateField = (id: number, key: 'name' | 'value', newValue: string) => {
+    setFields(fields.map(f =>
+      f.id === id ? { ...f, [key]: newValue } : f
+    ))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,15 +84,50 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
     setError(null)
 
     try {
-      const validEntries = entries.filter(e => e.valueUsd && parseFloat(e.valueUsd) > 0)
+      // Filter valid entries (must have name and value)
+      const validFields = fields.filter(f => f.name.trim() && f.value && parseFloat(f.value) > 0)
 
-      if (validEntries.length === 0) {
-        setError('Please enter at least one wallet value')
+      if (validFields.length === 0) {
+        setError('Please add at least one wallet with a name and value')
         setLoading(false)
         return
       }
 
+      // Create wallets that don't exist and get their IDs
+      const walletIds: Record<string, number> = {}
+
+      for (const field of validFields) {
+        const walletName = field.name.trim()
+
+        // Check if wallet already exists
+        const existingWallet = wallets.find(w => w.name.toLowerCase() === walletName.toLowerCase())
+
+        if (existingWallet) {
+          walletIds[walletName] = existingWallet.id
+        } else {
+          // Create new wallet
+          const res = await fetch('/api/wallets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: walletName })
+          })
+
+          if (res.ok) {
+            const newWallet = await res.json()
+            walletIds[walletName] = newWallet.id
+          } else {
+            throw new Error(`Failed to create wallet "${walletName}"`)
+          }
+        }
+      }
+
+      // Now create the entries
       if (type === 'monthly') {
+        const entries = validFields.map(f => ({
+          walletId: walletIds[f.name.trim()],
+          valueUsd: parseFloat(f.value)
+        }))
+
         const res = await fetch('/api/monthly/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -74,10 +135,7 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
             year: selectedYear,
             month: selectedMonth,
             btcPrice: btcPrice ? parseFloat(btcPrice) : null,
-            entries: validEntries.map(e => ({
-              walletId: e.walletId,
-              valueUsd: parseFloat(e.valueUsd)
-            }))
+            entries
           })
         })
 
@@ -86,14 +144,15 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
           throw new Error(data.error || 'Failed to add entries')
         }
       } else {
-        for (const entry of validEntries) {
+        // Daily entries
+        for (const field of validFields) {
           const res = await fetch('/api/daily', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              walletId: entry.walletId,
+              walletId: walletIds[field.name.trim()],
               date: selectedDate,
-              valueUsd: parseFloat(entry.valueUsd)
+              valueUsd: parseFloat(field.value)
             })
           })
 
@@ -112,18 +171,12 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
     }
   }
 
-  const updateEntry = (index: number, value: string) => {
-    const newEntries = [...entries]
-    newEntries[index].valueUsd = value
-    setEntries(newEntries)
-  }
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="fixed inset-0 bg-black/50" onClick={onClose}></div>
 
       <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg">
+        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Add {type === 'monthly' ? 'Monthly' : 'Daily'} Entry
@@ -135,7 +188,7 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
             {error && (
               <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-red-700 dark:text-red-300 text-sm">
                 {error}
@@ -179,7 +232,6 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
                   max={new Date().toISOString().split('T')[0]}
                   className="input"
                 />
-                <p className="text-xs text-gray-500 mt-1">You can select any past date</p>
               </div>
             )}
 
@@ -198,24 +250,51 @@ export default function AddEntryModal({ wallets, year, month, type, onClose, onA
             )}
 
             <div>
-              <label className="label">Wallet Values</label>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {entries.map((entry, index) => (
-                  <div key={entry.walletId} className="flex items-center space-x-2">
-                    <span className="w-32 text-sm text-gray-600 dark:text-gray-400 truncate">
-                      {entry.walletName}
-                    </span>
-                    <div className="flex-1 relative">
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">Wallet Values</label>
+                <button
+                  type="button"
+                  onClick={addField}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Wallet
+                </button>
+              </div>
+
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={field.name}
+                      onChange={(e) => updateField(field.id, 'name', e.target.value)}
+                      placeholder="Wallet name (e.g., Rabby)"
+                      className="input flex-1"
+                    />
+                    <div className="relative w-36">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                       <input
                         type="number"
-                        value={entry.valueUsd}
-                        onChange={(e) => updateEntry(index, e.target.value)}
+                        value={field.value}
+                        onChange={(e) => updateField(field.id, 'value', e.target.value)}
                         step="0.01"
                         placeholder="0.00"
-                        className="input pl-7"
+                        className="input pl-7 w-full"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => removeField(field.id)}
+                      disabled={fields.length === 1}
+                      className="p-2 text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 ))}
               </div>
