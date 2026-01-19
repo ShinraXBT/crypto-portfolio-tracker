@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Wallet {
+  id          Int            @id @default(autoincrement())
+  name        String         @unique
+  description String?
+  color       String         @default("#3b82f6")
+  createdAt   DateTime       @default(now())
+
+  monthlyEntries MonthlyEntry[]
+  dailyEntries   DailyEntry[]
+  alerts         Alert[]
+}
+
+model MonthlyEntry {
+  id        Int      @id @default(autoincrement())
+  walletId  Int
+  year      Int
+  month     Int
+  valueUsd  Float
+  btcPrice  Float?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, year, month])
+}
+
+model DailyEntry {
+  id        Int      @id @default(autoincrement())
+  walletId  Int
+  date      DateTime
+  valueUsd  Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, date])
+}
+
+model Alert {
+  id          Int       @id @default(autoincrement())
+  name        String
+  alertType   String    // 'value_threshold', 'variation_percent', 'btc_price'
+  condition   String    // 'above', 'below'
+  threshold   Float
+  walletId    Int?
+  isActive    Boolean   @default(true)
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  wallet      Wallet?   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
