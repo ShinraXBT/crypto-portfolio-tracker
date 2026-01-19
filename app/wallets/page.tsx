@@ -79,14 +79,14 @@ export default function WalletsPage() {
     }
   }
 
-  const handleDelete = async (wallet: Wallet) => {
-    if (!confirm(`Delete "${wallet.name}"? This will also delete all associated entries.`)) return
+  const handleDelete = async (walletItem: Wallet) => {
+    if (!confirm(`Delete "${walletItem.name}"? This will also delete all associated entries.`)) return
 
     try {
-      await fetch(`/api/wallets/${wallet.id}`, { method: 'DELETE' })
+      await fetch(`/api/wallets/${walletItem.id}`, { method: 'DELETE' })
       fetchWallets()
     } catch (error) {
-      alert('Failed to delete wallet')
+      console.error('Failed to delete wallet:', error)
     }
   }
 
