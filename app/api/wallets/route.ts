@@ -17,19 +17,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, description, color } = body
 
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return NextResponse.json({ error: 'Wallet name is required' }, { status: 400 })
+    }
+
     const wallet = await prisma.wallet.create({
       data: {
-        name,
-        description,
+        name: name.trim(),
+        description: description || null,
         color: color || '#3b82f6'
       }
     })
 
     return NextResponse.json(wallet, { status: 201 })
   } catch (error: any) {
+    console.error('Wallet creation error:', error)
     if (error.code === 'P2002') {
       return NextResponse.json({ error: 'Wallet with this name already exists' }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Failed to create wallet' }, { status: 500 })
+    return NextResponse.json({ error: `Failed to create wallet: ${error.message}` }, { status: 500 })
   }
 }
